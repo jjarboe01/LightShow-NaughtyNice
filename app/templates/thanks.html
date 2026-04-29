@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1f0d">
+  <title>Watch the Light Show!</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container container--thanks">
+    <header>
+      <div class="snowflakes" aria-hidden="true">❄ ❅ ❆ ❄ ❅ ❆</div>
+      <h1>🎄 Submitted!</h1>
+    </header>
+
+    {% if status == "nice" %}
+      <div class="result result--nice">
+        <p class="result__emoji">⭐</p>
+        <p class="result__name">{{ name }}</p>
+        <p class="result__verdict result__verdict--nice">NICE LIST</p>
+      </div>
+    {% else %}
+      <div class="result result--naughty">
+        <p class="result__emoji">🪨</p>
+        <p class="result__name">{{ name }}</p>
+        <p class="result__verdict result__verdict--naughty">NAUGHTY LIST</p>
+      </div>
+    {% endif %}
+
+    <div class="watch-box">
+      <p class="watch-box__line">👀 Watch the light show display!</p>
+      <p class="watch-box__sub">{{ name }}'s update will break in during the show.</p>
+    </div>
+
+    <a href="/" class="btn-submit btn-submit--secondary">Submit Another Child</a>
+
+    <footer>
+      <p>Photos are used only for the light show display and are not retained.</p>
+    </footer>
+  </div>
+</body>
+</html>

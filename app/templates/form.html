@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0d1f0d">
+  <title>Santa's Naughty or Nice List</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="snowflakes" aria-hidden="true">❄ ❅ ❆ ❄ ❅ ❆</div>
+      <h1>🎅 Santa's List</h1>
+      <p class="subtitle">Is your child on the Naughty or Nice list?</p>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, msg in messages %}
+            <div class="flash flash--{{ category }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="/submit" enctype="multipart/form-data" novalidate id="mainForm">
+
+      <!-- Child's name -->
+      <div class="field">
+        <label for="child_name">Child's First Name <span class="req">*</span></label>
+        <input type="text" id="child_name" name="child_name"
+               maxlength="40" autocomplete="off" inputmode="text"
+               placeholder="e.g. Emma" required>
+      </div>
+
+      <!-- Boy / Girl -->
+      <div class="field">
+        <span class="label">Boy or Girl <span class="req">*</span></span>
+        <div class="radio-group">
+          <label class="radio-card" id="card-boy">
+            <input type="radio" name="gender" value="boy" required>
+            <span class="radio-card__icon">👦</span>
+            <span class="radio-card__label">Boy</span>
+          </label>
+          <label class="radio-card" id="card-girl">
+            <input type="radio" name="gender" value="girl" required>
+            <span class="radio-card__icon">👧</span>
+            <span class="radio-card__label">Girl</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Naughty / Nice -->
+      <div class="field">
+        <span class="label">On the List <span class="req">*</span></span>
+        <div class="radio-group">
+          <label class="radio-card radio-card--nice" id="card-nice">
+            <input type="radio" name="status" value="nice" required>
+            <span class="radio-card__icon">⭐</span>
+            <span class="radio-card__label">Nice</span>
+          </label>
+          <label class="radio-card radio-card--naughty" id="card-naughty">
+            <input type="radio" name="status" value="naughty" required>
+            <span class="radio-card__icon">🪨</span>
+            <span class="radio-card__label">Naughty</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Photo upload (optional) -->
+      <div class="field">
+        <span class="label">Child's Photo <span class="optional">(optional)</span></span>
+        <p class="hint">Tap below to take a photo or choose one from your gallery.
+          Leave blank and we'll use a silhouette.</p>
+
+        <!-- Hidden real file input -->
+        <input type="file" id="photo" name="photo"
+               accept="image/*" style="display:none">
+
+        <!-- Styled tap area -->
+        <div class="photo-picker" id="photoPicker" role="button" tabindex="0"
+             aria-label="Add a photo (optional)">
+          <div class="photo-picker__placeholder" id="photoPlaceholder">
+            <span class="photo-picker__icon">📷</span>
+            <span class="photo-picker__text">Tap to add a photo</span>
+          </div>
+          <img id="photoPreview" class="photo-picker__preview" src="" alt="Selected photo preview" style="display:none">
+          <button type="button" id="photoRemove" class="photo-remove" style="display:none" aria-label="Remove photo">✕ Remove</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submitBtn">
+        🎄 Submit to Santa's List
+      </button>
+
+    </form>
+
+    <footer>
+      <p>Photos are used only for the light show display and are not retained.</p>
+    </footer>
+  </div>
+
+  <script>
+    // ── Radio card highlight ────────────────────────────────────────────────
+    document.querySelectorAll('.radio-card input[type="radio"]').forEach(function(radio) {
+      radio.addEventListener('change', function() {
+        var group = this.closest('.radio-group');
+        group.querySelectorAll('.radio-card').forEach(function(card) {
+          card.classList.remove('radio-card--selected');
+        });
+        this.closest('.radio-card').classList.add('radio-card--selected');
+      });
+    });
+
+    // ── Photo picker ────────────────────────────────────────────────────────
+    var photoInput     = document.getElementById('photo');
+    var photoPicker    = document.getElementById('photoPicker');
+    var photoPlaceholder = document.getElementById('photoPlaceholder');
+    var photoPreview   = document.getElementById('photoPreview');
+    var photoRemove    = document.getElementById('photoRemove');
+
+    // Open file picker when tap area is clicked
+    photoPicker.addEventListener('click', function(e) {
+      if (e.target === photoRemove || photoRemove.contains(e.target)) return;
+      photoInput.click();
+    });
+    photoPicker.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); photoInput.click(); }
+    });
+
+    // Show preview when file selected
+    photoInput.addEventListener('change', function() {
+      var file = this.files[0];
+      if (!file) return;
+
+      // Client-side size guard (5 MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('That photo is over 5 MB. Please choose a smaller one.');
+        this.value = '';
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        photoPreview.src = e.target.result;
+        photoPreview.style.display = 'block';
+        photoPlaceholder.style.display = 'none';
+        photoRemove.style.display = 'inline-block';
+        photoPicker.classList.add('photo-picker--has-image');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Remove photo
+    photoRemove.addEventListener('click', function(e) {
+      e.stopPropagation();
+      photoInput.value = '';
+      photoPreview.src = '';
+      photoPreview.style.display = 'none';
+      photoPlaceholder.style.display = 'flex';
+      photoRemove.style.display = 'none';
+      photoPicker.classList.remove('photo-picker--has-image');
+    });
+
+    // ── Submit guard: disable button to prevent double-tap ─────────────────
+    document.getElementById('mainForm').addEventListener('submit', function() {
+      var btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ Sending to Santa…';
+    });
+  </script>
+</body>
+</html>

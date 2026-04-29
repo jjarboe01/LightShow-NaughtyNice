@@ -1,0 +1,305 @@
+/* ============================================================
+   LightShow-NaughtyNice — Christmas theme, mobile-first
+   ============================================================ */
+
+:root {
+  --red:      #cc0000;
+  --green:    #006400;
+  --gold:     #d4a017;
+  --bg:       #0d1f0d;
+  --surface:  #1a2e1a;
+  --text:     #f0ead6;
+  --text-dim: #a09070;
+  --nice:     #1a7a1a;
+  --naughty:  #7a1a1a;
+  --radius:   14px;
+  --tap-min:  52px;      /* minimum tap target height */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.container {
+  background: var(--surface);
+  border: 2px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 0 40px rgba(212, 160, 23, 0.18);
+  margin: 0 auto;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+header { text-align: center; margin-bottom: 1.5rem; }
+
+.snowflakes {
+  font-size: 1.3rem;
+  letter-spacing: 0.4rem;
+  color: var(--gold);
+  margin-bottom: 0.4rem;
+}
+
+h1 {
+  font-size: 2rem;
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(212, 160, 23, 0.5);
+  margin-bottom: 0.2rem;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+/* ── Flash messages ───────────────────────────────────────────────────────── */
+
+.flash-messages { margin-bottom: 1rem; }
+
+.flash {
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.flash--error   { background: #4a1010; border-left: 4px solid var(--red); }
+.flash--warning { background: #3a2a00; border-left: 4px solid var(--gold); }
+
+/* ── Form fields ──────────────────────────────────────────────────────────── */
+
+.field { margin-bottom: 1.4rem; }
+
+label,
+.label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+}
+
+.req      { color: var(--red); }
+.optional { color: var(--text-dim); font-weight: normal; font-size: 0.85rem; }
+.hint     { color: var(--text-dim); font-size: 0.82rem; margin-bottom: 0.5rem; line-height: 1.4; }
+
+input[type="text"] {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  min-height: var(--tap-min);
+  background: #0d1f0d;
+  border: 1px solid #3a5a3a;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1.1rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+/* ── Radio cards ──────────────────────────────────────────────────────────── */
+
+.radio-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.radio-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0.5rem;
+  min-height: 90px;
+  background: #0d1f0d;
+  border: 2px solid #3a5a3a;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.radio-card input[type="radio"] { display: none; }
+
+.radio-card__icon  { font-size: 2.2rem; margin-bottom: 0.3rem; line-height: 1; }
+.radio-card__label { font-size: 0.9rem; color: var(--text-dim); font-weight: bold; }
+
+/* Selected state — works with :has() (modern) and JS-added class (fallback) */
+.radio-card--selected,
+.radio-card:has(input:checked) {
+  border-color: var(--gold);
+  background: #1e3a1e;
+}
+.radio-card--selected .radio-card__label,
+.radio-card:has(input:checked) .radio-card__label {
+  color: var(--gold);
+}
+
+.radio-card--nice.radio-card--selected,
+.radio-card--nice:has(input:checked) {
+  border-color: #4caf50;
+  background: #082808;
+}
+.radio-card--nice.radio-card--selected .radio-card__label,
+.radio-card--nice:has(input:checked) .radio-card__label {
+  color: #4caf50;
+}
+
+.radio-card--naughty.radio-card--selected,
+.radio-card--naughty:has(input:checked) {
+  border-color: var(--red);
+  background: #2a0808;
+}
+.radio-card--naughty.radio-card--selected .radio-card__label,
+.radio-card--naughty:has(input:checked) .radio-card__label {
+  color: #ff6666;
+}
+
+/* ── Photo picker ─────────────────────────────────────────────────────────── */
+
+.photo-picker {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+  background: #0d1f0d;
+  border: 2px dashed #3a5a3a;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.2s;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo-picker:hover,
+.photo-picker:focus { border-color: var(--gold); outline: none; }
+
+.photo-picker__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 120px;
+  padding: 1rem;
+}
+.photo-picker__icon { font-size: 2rem; }
+.photo-picker__text { font-size: 0.9rem; color: var(--text-dim); }
+
+.photo-picker__preview {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.photo-picker--has-image {
+  border-style: solid;
+  border-color: var(--gold);
+}
+
+.photo-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo-remove:hover { background: rgba(180,0,0,0.85); }
+
+/* ── Submit button ────────────────────────────────────────────────────────── */
+
+.btn-submit {
+  display: block;
+  width: 100%;
+  padding: 1rem;
+  margin-top: 1.25rem;
+  min-height: var(--tap-min);
+  background: var(--red);
+  color: #fff;
+  font-size: 1.1rem;
+  font-family: inherit;
+  font-weight: bold;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-submit:hover  { background: #aa0000; }
+.btn-submit:active { transform: scale(0.98); }
+.btn-submit:disabled { opacity: 0.6; cursor: default; }
+
+.btn-submit--secondary {
+  background: var(--green);
+  margin-top: 1rem;
+}
+.btn-submit--secondary:hover { background: #004d00; }
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+
+footer {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ── Thanks page ──────────────────────────────────────────────────────────── */
+
+.container--thanks { text-align: center; }
+
+.result {
+  margin: 1.5rem 0;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius);
+  border: 2px solid;
+}
+.result--nice    { border-color: #4caf50; background: #082808; }
+.result--naughty { border-color: var(--red); background: #2a0808; }
+
+.result__emoji   { font-size: 3rem; margin-bottom: 0.4rem; line-height: 1; }
+.result__name    { font-size: 1.8rem; font-weight: bold; color: var(--gold); margin-bottom: 0.3rem; }
+.result__verdict { font-size: 1rem; font-weight: bold; letter-spacing: 0.08em; }
+.result__verdict--nice    { color: #4caf50; }
+.result__verdict--naughty { color: #ff6666; }
+
+.watch-box {
+  background: #0d1f0d;
+  border: 1px solid #3a5a3a;
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.watch-box__line { font-size: 1.1rem; color: var(--gold); margin-bottom: 0.3rem; }
+.watch-box__sub  { font-size: 0.85rem; color: var(--text-dim); }

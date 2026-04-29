@@ -1,0 +1,45 @@
+# Environment / secrets
+.env
+*.env
+*.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+venv/
+.venv/
+env/
+.tox/
+
+# Docker
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test / coverage
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Node (if any frontend tooling added later)
+node_modules/
