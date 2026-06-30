@@ -1,12 +1,12 @@
 version: "3.9"
 
 services:
-  web:
+  naughtynicelist:
     build: .
-    container_name: lightshow-web
+    container_name: lightshow-naughtynicelist
     restart: unless-stopped
     environment:
-      - FPP_HOST=${FPP_HOST}
+      - FPP_HOST=${FPP_HOST:-192.168.200.10}
       - FPP_PORT=${FPP_PORT:-80}
       - FPP_PHOTO_MODEL=${FPP_PHOTO_MODEL:-PhotoZone}
       - FPP_TICKER_MODEL=${FPP_TICKER_MODEL:-TickerZone}
@@ -16,23 +16,66 @@ services:
       - PHOTO_ZONE_HEIGHT=140
       - TICKER_ZONE_HEIGHT=52
       - UPLOAD_MAX_BYTES=${UPLOAD_MAX_BYTES:-5242880}
-      - SECRET_KEY=${SECRET_KEY:-changeme}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - upload_tmp:/app/uploads
     expose:
       - "8000"
+    networks:
+      - internal
+
+  ghost:
+    image: ghost:latest
+    container_name: lightshow-ghost
+    restart: unless-stopped
+    environment:
+      - url=${GHOST_URL}
+      - database__client=mysql
+      - database__connection__host=mysql
+      - database__connection__user=ghost
+      - database__connection__password=${GHOST_DB_PASSWORD}
+      - database__connection__database=ghost
+    volumes:
+      - ghost_content:/var/lib/ghost/content
+    depends_on:
+      - mysql
+    networks:
+      - internal
+
+  mysql:
+    image: mysql:8.0
+    container_name: lightshow-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=ghost
+      - MYSQL_USER=ghost
+      - MYSQL_PASSWORD=${GHOST_DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
 
   nginx:
     image: nginx:alpine
     container_name: lightshow-nginx
     restart: unless-stopped
-    ports:
-      - "80:80"
+    # No ports published to host — cloudflared reaches nginx via internal Docker network
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./app/static:/app/static:ro
     depends_on:
-      - web
+      - naughtynicelist
+      - ghost
+    networks:
+      - internal
+
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   upload_tmp:
+  ghost_content:
+  mysql_data:
