@@ -1,0 +1,20 @@
+{
+    "name": "breaking_news",
+    "version": 4,
+    "repeat": 0,
+    "loopCount": 0,
+    "desc": "",
+    "random": 0,
+    "empty": false,
+    "leadIn": [],
+    "mainPlaylist": [
+        {
+            "type": "script",
+            "enabled": 1,
+            "playOnce": 0,
+            "scriptName": "show_display_image.py",
+            "scriptArgs": ""
+        }
+    ],
+    "leadOut": []
+}
