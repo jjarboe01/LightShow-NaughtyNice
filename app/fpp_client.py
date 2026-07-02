@@ -1,32 +1,39 @@
 """
-FPP REST API client.
+FPP REST API client — FPP 9.x compatible.
 
-Handles all communication between the Flask app and Falcon Player running
-on the Pi 5.  FPP API docs: http://<fpp-host>/api/help
+Handles all communication between the Flask app and Falcon Player on the Pi 5.
+FPP API docs: http://<fpp-host>/api/help
 
-Key overlay model names and the sequence name must be configured in FPP
-before this client is called -- see docs/fpp_setup.md.
+Changes vs original (FPP 6.x assumptions):
+- Playlist start: GET /api/playlist/{name}/start  (singular; /playlists/ plural → 404)
+- Command API: args must be an ARRAY, not a dict
+- Photo display: composite PIL image onto background, upload via /jqUpload → Image playlist entry
+- Ticker text: "Text" effect (not "Scrolling Text"), correct field names
 """
 
-import base64
+import io
 import logging
+import os
 from typing import Optional
 
 import requests
 from PIL import Image
-import io
 
 log = logging.getLogger(__name__)
+
+# Background image path inside container: /app/static/breaking_news_bg.png
+_BG_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "static", "breaking_news_bg.png")
+_DISPLAY_FILENAME = "current_display.png"
 
 
 class FPPClient:
     def __init__(self, base_url: str, photo_model: str, ticker_model: str,
                  playlist: str, timeout: int = 5):
-        self.base_url    = base_url.rstrip("/")
-        self.photo_model = photo_model
+        self.base_url     = base_url.rstrip("/")
+        self.photo_model  = photo_model   # kept for compat; no longer used for pixel push
         self.ticker_model = ticker_model
-        self.playlist    = playlist
-        self.timeout     = timeout
+        self.playlist     = playlist
+        self.timeout      = timeout
 
     # ------------------------------------------------------------------
     # Health / status
@@ -47,44 +54,24 @@ class FPPClient:
 
     def break_in_playlist(self, name: Optional[str] = None) -> bool:
         """
-        Interrupt whatever FPP is currently playing and immediately start
-        the named playlist.  When the playlist finishes, FPP returns to
-        whatever was playing before (the main show sequence).
+        Start the named playlist on FPP.
 
-        Uses /api/playlists/{name}/startNow which is the FPP 6.x break-in
-        endpoint.  Falls back to a regular /start if startNow returns 404
-        (older FPP builds).
+        On a Remote-mode instance this breaks in from whatever is currently
+        synced and playing; FPP resumes normal sync when the playlist ends.
+
+        FPP 9.x: GET /api/playlist/{name}/start  (SINGULAR — /api/playlists/ is list-only)
         """
         target = name or self.playlist
-
-        # Try break-in endpoint first
-        url = f"{self.base_url}/api/playlists/{target}/startNow"
+        url = f"{self.base_url}/api/playlist/{target}/start"
         try:
             r = requests.get(url, timeout=self.timeout)
             if r.status_code == 200:
-                log.info("Break-in started FPP playlist: %s", target)
+                log.info("Started FPP playlist: %s", target)
                 return True
-            if r.status_code == 404:
-                log.warning("startNow not found, falling back to /start for %s", target)
-                return self._start_playlist_basic(target)
-            log.error("break_in_playlist %s -> HTTP %s: %s", target, r.status_code, r.text)
+            log.error("break_in_playlist %s -> HTTP %s: %s", target, r.status_code, r.text[:200])
             return False
         except requests.RequestException as exc:
             log.error("break_in_playlist exception: %s", exc)
-            return False
-
-    def _start_playlist_basic(self, name: str) -> bool:
-        """Plain playlist start — used as fallback if startNow is unavailable."""
-        url = f"{self.base_url}/api/playlists/{name}/start"
-        try:
-            r = requests.get(url, timeout=self.timeout)
-            if r.status_code == 200:
-                log.info("Started (basic) FPP playlist: %s", name)
-                return True
-            log.error("_start_playlist_basic %s -> HTTP %s: %s", name, r.status_code, r.text)
-            return False
-        except requests.RequestException as exc:
-            log.error("_start_playlist_basic exception: %s", exc)
             return False
 
     def stop_playlist(self) -> bool:
@@ -96,79 +83,108 @@ class FPPClient:
             return False
 
     # ------------------------------------------------------------------
-    # Pixel overlay: photo zone
+    # Photo: composite onto background and upload to FPP images dir
     # ------------------------------------------------------------------
 
-    def push_photo_overlay(self, image: Image.Image) -> bool:
+    def push_photo_overlay(self, photo: Image.Image) -> bool:
         """
-        Push a PIL Image to the FPP 'PhotoZone' pixel overlay model.
+        Composite the photo zone image onto the full-matrix background, then
+        upload the result to FPP as 'current_display.png'.
 
-        image should already be sized to exactly (MATRIX_WIDTH, PHOTO_ZONE_HEIGHT).
-        FPP expects the pixel data as a base64-encoded RGBA byte string.
+        The breaking_news playlist's Image entry references this filename from
+        /home/fpp/media/images/ — FPP's /jqUpload endpoint moves uploaded PNGs
+        there automatically.
+
+        photo: PIL Image (RGBA, MATRIX_WIDTH × PHOTO_ZONE_HEIGHT) from image_processor.
         """
+        # Load 192×192 background
         try:
-            rgba = image.convert("RGBA")
-            raw  = rgba.tobytes()            # width * height * 4 bytes
-            b64  = base64.b64encode(raw).decode()
+            bg = Image.open(_BG_IMAGE_PATH).convert("RGBA")
+        except Exception as exc:
+            log.error("Could not load background image %s: %s", _BG_IMAGE_PATH, exc)
+            return False
 
-            payload = {"data": b64}
-            url = f"{self.base_url}/api/overlays/models/{self.photo_model}/data"
-            r   = requests.post(url, json=payload, timeout=self.timeout)
+        try:
+            # Paste photo (192×140) onto the top of the background at (0, 0)
+            photo_rgba = photo.convert("RGBA")
+            bg.paste(photo_rgba, (0, 0), photo_rgba)
 
+            # Encode to PNG bytes (convert to RGB — LED matrix has no alpha)
+            buf = io.BytesIO()
+            bg.convert("RGB").save(buf, format="PNG")
+            buf.seek(0)
+        except Exception as exc:
+            log.error("push_photo_overlay image processing error: %s", exc)
+            return False
+
+        # Upload via jqUpload (multipart/form-data); FPP moves PNG → /home/fpp/media/images/
+        url = f"{self.base_url}/jqUpload"
+        try:
+            r = requests.post(
+                url,
+                files={"files[]": (_DISPLAY_FILENAME, buf, "image/png")},
+                timeout=max(self.timeout, 15),
+            )
             if r.status_code in (200, 204):
-                log.info("Photo overlay pushed to model '%s'", self.photo_model)
+                log.info("Uploaded %s to FPP", _DISPLAY_FILENAME)
                 return True
-            log.error("push_photo_overlay -> HTTP %s: %s", r.status_code, r.text)
+            log.error("push_photo_overlay upload -> HTTP %s: %s", r.status_code, r.text[:200])
             return False
         except requests.RequestException as exc:
-            log.error("push_photo_overlay exception: %s", exc)
+            log.error("push_photo_overlay upload exception: %s", exc)
             return False
 
     # ------------------------------------------------------------------
-    # Pixel overlay: ticker text
+    # Ticker text via Overlay Model Effect
     # ------------------------------------------------------------------
 
     def push_ticker_text(self, child_name: str, status: str) -> bool:
         """
-        Trigger FPP's built-in 'Scrolling Text' effect on the TickerZone
-        overlay model with dynamic name + status text.
+        Trigger FPP's built-in 'Text' overlay effect on TickerZone.
 
-        status: 'nice' | 'naughty'
+        FPP 9.x command API: args MUST be an array (not a dict).
+
+        "Overlay Model Effect" / "Text" array arg order:
+          [Models, AutoEnable, Effect, Color, Font, FontSize,
+           FontAntiAlias, Position, Speed, Duration, Text]
         """
-        label   = status.upper()          # NICE or NAUGHTY
+        label   = status.upper()           # NICE or NAUGHTY
         color   = "#00FF00" if status == "nice" else "#FF0000"
         message = f"  BREAKING: {child_name} is on the {label} LIST!  "
 
         payload = {
             "command": "Overlay Model Effect",
-            "args": {
-                "Model":           self.ticker_model,
-                "Effect":          "Scrolling Text",
-                "Enabled":         "true",
-                "Color":           color,
-                "Text":            message,
-                "Font":            "Helvetica",       # font available on Pi
-                "FontSize":        "16",
-                "PixelsPerSecond": "30",
-                "Direction":       "R2L",             # right-to-left scroll
-                "Position":        "Centered",
-                "Antialiased":     "false",
-            }
+            "args": [
+                self.ticker_model,  # Models
+                "Enabled",          # AutoEnable
+                "Text",             # Effect  (NOT "Scrolling Text")
+                color,              # Color
+                "Helvetica",        # Font
+                "16",               # FontSize
+                "false",            # FontAntiAlias
+                "Right to Left",    # Position
+                "30",               # Speed  (NOT "PixelsPerSecond")
+                "0",                # Duration (0 = run indefinitely)
+                message,            # Text
+            ],
         }
         try:
-            url = f"{self.base_url}/api/command"
-            r   = requests.post(url, json=payload, timeout=self.timeout)
+            r = requests.post(
+                f"{self.base_url}/api/command",
+                json=payload,
+                timeout=self.timeout,
+            )
             if r.status_code in (200, 204):
                 log.info("Ticker text pushed: %s", message.strip())
                 return True
-            log.error("push_ticker_text -> HTTP %s: %s", r.status_code, r.text)
+            log.error("push_ticker_text -> HTTP %s: %s", r.status_code, r.text[:200])
             return False
         except requests.RequestException as exc:
             log.error("push_ticker_text exception: %s", exc)
             return False
 
     # ------------------------------------------------------------------
-    # Overlay enable / disable
+    # Overlay enable / disable  (used for TickerZone if needed standalone)
     # ------------------------------------------------------------------
 
     def enable_overlay(self, model_name: str) -> bool:
@@ -178,13 +194,20 @@ class FPPClient:
         return self._set_overlay_state(model_name, "Disabled")
 
     def _set_overlay_state(self, model_name: str, state: str) -> bool:
+        """
+        FPP 9.x: command API args must be an array, not a dict.
+        e.g. {"command": "Overlay Model State", "args": ["TickerZone", "Enabled"]}
+        """
         payload = {
             "command": "Overlay Model State",
-            "args": {"Model": model_name, "State": state}
+            "args": [model_name, state],   # array — NOT {"Model": ..., "State": ...}
         }
         try:
-            r = requests.post(f"{self.base_url}/api/command",
-                              json=payload, timeout=self.timeout)
+            r = requests.post(
+                f"{self.base_url}/api/command",
+                json=payload,
+                timeout=self.timeout,
+            )
             return r.status_code in (200, 204)
         except requests.RequestException as exc:
             log.error("_set_overlay_state exception: %s", exc)

@@ -137,19 +137,20 @@ def submit():
     # --- Push to FPP ---
     fpp_ok = True
 
-    # 1. Break into the current show and play the "breaking news" playlist.
-    #    FPP will return to the main show sequence when it finishes.
+    # 1. Composite photo onto background and upload to FPP *before* starting
+    #    the playlist, so current_display.png is ready when FPP reads it.
+    if not fpp.push_photo_overlay(display_img):
+        log.error("Could not upload photo image to FPP")
+        fpp_ok = False
+
+    # 2. Break into the current show and play the "breaking news" playlist.
+    #    The Image entry in that playlist displays current_display.png on P5Large.
+    #    FPP returns to the main show sequence when the playlist finishes.
     if not fpp.break_in_playlist():
         log.error("Could not break-in FPP playlist '%s'", Config.FPP_BASE_PLAYLIST)
         fpp_ok = False
 
-    # 2. Enable photo overlay model and push pixel data
-    fpp.enable_overlay(Config.FPP_PHOTO_MODEL)
-    if not fpp.push_photo_overlay(display_img):
-        log.error("Could not push photo overlay to FPP")
-        fpp_ok = False
-
-    # 3. Push scrolling ticker text
+    # 3. Start scrolling ticker text on the TickerZone overlay model
     if not fpp.push_ticker_text(child_name, status):
         log.error("Could not push ticker text to FPP")
         fpp_ok = False
