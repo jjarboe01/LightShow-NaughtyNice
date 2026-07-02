@@ -146,8 +146,6 @@ class FPPClient:
 
             # ── Header bar (rows 0–19) ──────────────────────────────────────
             draw.rectangle([(0, 0), (191, _HEADER_H - 1)], fill=_COLOR_RED)
-            # Small white accent bar on left edge
-            draw.rectangle([(0, 0), (3, _HEADER_H - 1)], fill=_COLOR_WHITE)
             font_header = _get_font(11, bold=True)
             _draw_text_centered(draw, "BREAKING NEWS", font_header,
                                 6, 0, 191, _HEADER_H, _COLOR_WHITE)
