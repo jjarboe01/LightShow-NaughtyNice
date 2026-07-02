@@ -11,6 +11,8 @@ Route summary:
 import os
 import uuid
 import logging
+import threading
+import time
 from pathlib import Path
 
 from flask import Flask, request, render_template, redirect, url_for, jsonify, flash
@@ -150,10 +152,15 @@ def submit():
         log.error("Could not break-in FPP playlist '%s'", Config.FPP_BASE_PLAYLIST)
         fpp_ok = False
 
-    # 3. Start scrolling ticker text on the TickerZone overlay model
-    if not fpp.push_ticker_text(child_name, status):
-        log.error("Could not push ticker text to FPP")
-        fpp_ok = False
+    # 3. Start scrolling ticker text after a short delay so it syncs with the
+    #    image appearing on the matrix (show_display_image.py has a 3s startup
+    #    delay to let the upload settle before reading the file).
+    def _deferred_ticker():
+        time.sleep(3)
+        if not fpp.push_ticker_text(child_name, status):
+            log.error("Deferred ticker text push failed for %s", child_name)
+
+    threading.Thread(target=_deferred_ticker, daemon=True).start()
 
     # --- Clean up temp upload ---
     if upload_path:
