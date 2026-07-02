@@ -117,12 +117,14 @@ class FPPClient:
             log.error("push_photo_overlay image processing error: %s", exc)
             return False
 
-        # Upload via jqUpload (multipart/form-data); FPP moves PNG → /home/fpp/media/images/
-        url = f"{self.base_url}/jqUpload"
+        # Upload via FPP REST API: POST /api/file/images/{filename} with raw PNG body.
+        # MapExtention(.png) → images directory → /home/fpp/media/images/
+        url = f"{self.base_url}/api/file/images/{_DISPLAY_FILENAME}"
         try:
             r = requests.post(
                 url,
-                files={"files[]": (_DISPLAY_FILENAME, buf, "image/png")},
+                data=buf.read(),
+                headers={"Content-Type": "image/png"},
                 timeout=max(self.timeout, 15),
             )
             if r.status_code in (200, 204):
@@ -159,7 +161,7 @@ class FPPClient:
                 "Enabled",          # AutoEnable
                 "Text",             # Effect  (NOT "Scrolling Text")
                 color,              # Color
-                "Helvetica",        # Font
+                "DejaVuSans",       # Font  (Helvetica has no font file on Pi; DejaVuSans does)
                 "16",               # FontSize
                 "false",            # FontAntiAlias
                 "Right to Left",    # Position
