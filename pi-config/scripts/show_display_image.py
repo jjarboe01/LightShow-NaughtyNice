@@ -39,6 +39,11 @@ def fpp_put(path):
     subprocess.run(['curl', '-s', '-X', 'PUT', f'http://localhost{path}'],
                    capture_output=True)
 
+# 0. Wait for the image upload to complete before doing anything.
+#    The Docker app uploads current_display.png then immediately starts this
+#    playlist; a short delay ensures the file is fully written before ffmpeg reads it.
+time.sleep(3)
+
 # 1. Enable PhotoZone and force-create the shared memory overlay buffer.
 #    TickerZone is enabled separately by the Docker app's push_ticker_text() call.
 fpp_cmd('Overlay Model State', [MODEL, 'Enabled'])
