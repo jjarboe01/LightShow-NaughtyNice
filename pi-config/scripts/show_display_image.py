@@ -44,9 +44,10 @@ def fpp_put(path):
 #    playlist; a short delay ensures the file is fully written before ffmpeg reads it.
 time.sleep(3)
 
-# 1. Enable PhotoZone and force-create the shared memory overlay buffer.
-#    TickerZone is enabled separately by the Docker app's push_ticker_text() call.
-fpp_cmd('Overlay Model State', [MODEL, 'Enabled'])
+# 1. Force-create the shared memory overlay buffer WITHOUT enabling PhotoZone yet.
+#    The /dev/shm buffer persists between runs and still holds the previous image.
+#    We must write the new image into it BEFORE enabling, so the overlay never
+#    goes live with stale data.
 fpp_put(f'/api/overlays/model/{MODEL}/mmap')
 time.sleep(0.25)
 
@@ -67,20 +68,29 @@ if len(pixel_data) != expected:
           file=sys.stderr)
     sys.exit(1)
 
-# 3. Write pixel data to overlay buffer and set dirty flag.
-#    FPP output loop (PixelOverlay.cpp:324) detects dirty and calls
-#    flushOverlayBuffer() -> setData() -> channelData -> ColorLight output.
-#    PhotoZone writes to channels 62031-142670 only — TickerZone (142671+) unaffected.
+# 3. Write new image into the buffer while PhotoZone is still disabled.
+#    Then enable PhotoZone — it goes live immediately with the correct data,
+#    no flash of the previous image.
 try:
     with open(BUFFER_PATH, 'r+b') as f:
         f.seek(PIXEL_OFFSET)
         f.write(pixel_data)
+        # Clear dirty flag so FPP doesn't flush stale data on enable
         f.seek(FLAGS_OFFSET)
-        flags = struct.unpack('<I', f.read(4))[0]
-        f.seek(FLAGS_OFFSET)
-        f.write(struct.pack('<I', flags | 0x1))  # set dirty bit
+        f.write(struct.pack('<I', 0))
 except Exception as e:
     print(f'Overlay buffer write error: {e}', file=sys.stderr)
+    sys.exit(1)
+
+# 4. Enable PhotoZone (buffer already has new image), then set dirty to trigger flush.
+#    TickerZone is enabled separately by the Docker app's push_ticker_text() call.
+fpp_cmd('Overlay Model State', [MODEL, 'Enabled'])
+try:
+    with open(BUFFER_PATH, 'r+b') as f:
+        f.seek(FLAGS_OFFSET)
+        f.write(struct.pack('<I', 0x1))  # set dirty bit → FPP output loop flushes
+except Exception as e:
+    print(f'Dirty flag set error: {e}', file=sys.stderr)
     sys.exit(1)
 
 # 4. Hold for DURATION seconds.
