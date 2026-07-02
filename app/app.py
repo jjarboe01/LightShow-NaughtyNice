@@ -141,7 +141,7 @@ def submit():
 
     # 1. Composite photo onto background and upload to FPP *before* starting
     #    the playlist, so current_display.png is ready when FPP reads it.
-    if not fpp.push_photo_overlay(display_img):
+    if not fpp.push_photo_overlay(display_img, child_name, status):
         log.error("Could not upload photo image to FPP")
         fpp_ok = False
 

@@ -17,13 +17,46 @@ import os
 from typing import Optional
 
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger(__name__)
 
-# Background image path inside container: /app/static/breaking_news_bg.png
-_BG_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "static", "breaking_news_bg.png")
 _DISPLAY_FILENAME = "current_display.png"
+
+# Breaking news overlay dimensions (PhotoZone is 192×140)
+_HEADER_H   = 20   # red "BREAKING NEWS" bar at top
+_LOWER_Y    = 118  # y-start of lower third chyron
+_LOWER_H    = 22   # height of lower third (118–139)
+_BADGE_X    = 122  # x-start of NICE/NAUGHTY status badge in lower third
+
+_COLOR_RED      = (204,   0,   0)
+_COLOR_NAVY     = (  0,  20,  90)
+_COLOR_NICE     = (  0, 160,  40)
+_COLOR_NAUGHTY  = (200,   0,   0)
+_COLOR_WHITE    = (255, 255, 255)
+
+def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    for base in ("/usr/share/fonts/truetype/dejavu",
+                 "/usr/share/fonts/dejavu",
+                 "/usr/share/fonts/TTF"):
+        path = os.path.join(base, name)
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+
+def _draw_text_centered(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont,
+                        x0: int, y0: int, x1: int, y1: int, color: tuple) -> None:
+    """Draw text centered inside the rectangle (x0,y0)–(x1,y1)."""
+    bb = font.getbbox(text)
+    tw, th = bb[2] - bb[0], bb[3] - bb[1]
+    x = x0 + ((x1 - x0) - tw) // 2
+    y = y0 + ((y1 - y0) - th) // 2
+    draw.text((x, y), text, fill=color, font=font)
 
 
 class FPPClient:
@@ -86,32 +119,68 @@ class FPPClient:
     # Photo: composite onto background and upload to FPP images dir
     # ------------------------------------------------------------------
 
-    def push_photo_overlay(self, photo: Image.Image) -> bool:
+    def push_photo_overlay(self, photo: Image.Image,
+                           child_name: str, status: str) -> bool:
         """
-        Composite the photo zone image onto the full-matrix background, then
-        upload the result to FPP as 'current_display.png'.
+        Composite the photo onto a 192×192 canvas with breaking-news overlays,
+        then upload to FPP as 'current_display.png'.
 
-        The breaking_news playlist's Image entry references this filename from
-        /home/fpp/media/images/ — FPP's /jqUpload endpoint moves uploaded PNGs
-        there automatically.
+        Overlay layout (PhotoZone = top 192×140; TickerZone owns rows 140–191):
+          rows  0–19  : red "BREAKING NEWS" header bar
+          rows 20–117 : photo (visible between header and lower third)
+          rows 118–139: lower third chyron — name left, NICE/NAUGHTY badge right
+          rows 140–191: black (TickerZone overlay handles these)
 
-        photo: PIL Image (RGBA, MATRIX_WIDTH × PHOTO_ZONE_HEIGHT) from image_processor.
+        photo     : PIL Image (RGBA, 192×140) from image_processor.
+        child_name: submitted child name for lower third chyron.
+        status    : "nice" or "naughty" — controls badge color.
         """
-        # Load 192×192 background
         try:
-            bg = Image.open(_BG_IMAGE_PATH).convert("RGBA")
-        except Exception as exc:
-            log.error("Could not load background image %s: %s", _BG_IMAGE_PATH, exc)
-            return False
+            # 192×192 black canvas
+            canvas = Image.new("RGB", (192, 192), (0, 0, 0))
 
-        try:
-            # Paste photo (192×140) onto the top of the background at (0, 0)
-            photo_rgba = photo.convert("RGBA")
-            bg.paste(photo_rgba, (0, 0), photo_rgba)
+            # Paste photo as base layer (fills rows 0–139)
+            canvas.paste(photo.convert("RGB"), (0, 0))
 
-            # Encode to PNG bytes (convert to RGB — LED matrix has no alpha)
+            draw = ImageDraw.Draw(canvas)
+
+            # ── Header bar (rows 0–19) ──────────────────────────────────────
+            draw.rectangle([(0, 0), (191, _HEADER_H - 1)], fill=_COLOR_RED)
+            # Small white accent bar on left edge
+            draw.rectangle([(0, 0), (3, _HEADER_H - 1)], fill=_COLOR_WHITE)
+            font_header = _get_font(11, bold=True)
+            _draw_text_centered(draw, "BREAKING NEWS", font_header,
+                                6, 0, 191, _HEADER_H, _COLOR_WHITE)
+
+            # ── Lower third chyron (rows 118–139) ──────────────────────────
+            draw.rectangle([(0, _LOWER_Y), (191, _LOWER_Y + _LOWER_H - 1)],
+                           fill=_COLOR_NAVY)
+
+            # Status badge (right side)
+            badge_color = _COLOR_NICE if status == "nice" else _COLOR_NAUGHTY
+            draw.rectangle([(_BADGE_X, _LOWER_Y), (191, _LOWER_Y + _LOWER_H - 1)],
+                           fill=badge_color)
+
+            # Child name (left side, truncated to fit)
+            font_name   = _get_font(10)
+            font_status = _get_font(10, bold=True)
+
+            name_display = child_name.upper()
+            # Truncate if name is too wide for the left panel
+            while font_name.getbbox(name_display)[2] > (_BADGE_X - 8) and len(name_display) > 1:
+                name_display = name_display[:-1]
+
+            draw.text((4, _LOWER_Y + 5), name_display,
+                      fill=_COLOR_WHITE, font=font_name)
+
+            status_text = "NICE" if status == "nice" else "NAUGHTY"
+            _draw_text_centered(draw, status_text, font_status,
+                                _BADGE_X, _LOWER_Y, 191, _LOWER_Y + _LOWER_H,
+                                _COLOR_WHITE)
+
+            # Encode to PNG bytes
             buf = io.BytesIO()
-            bg.convert("RGB").save(buf, format="PNG")
+            canvas.save(buf, format="PNG")
             buf.seek(0)
         except Exception as exc:
             log.error("push_photo_overlay image processing error: %s", exc)
