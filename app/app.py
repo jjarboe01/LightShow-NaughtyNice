@@ -19,6 +19,7 @@ from flask import Flask, request, render_template, redirect, url_for, jsonify, f
 from werkzeug.utils import secure_filename
 
 from config import Config
+from content_filter import contains_profanity
 from fpp_client import FPPClient
 from image_processor import prepare_display_image
 
@@ -109,6 +110,8 @@ def submit():
         errors.append("Child's name is required.")
     if len(child_name) > 40:
         errors.append("Name must be 40 characters or fewer.")
+    if child_name and contains_profanity(child_name):
+        errors.append("Please enter an appropriate name.")
     if gender not in ("boy", "girl"):
         errors.append("Please select Boy or Girl.")
     if status not in ("nice", "naughty"):
