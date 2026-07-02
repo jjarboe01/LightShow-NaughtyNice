@@ -136,11 +136,14 @@ class FPPClient:
         status    : "nice" or "naughty" — controls badge color.
         """
         try:
-            # 192×192 black canvas
-            canvas = Image.new("RGB", (192, 192), (0, 0, 0))
+            # 192×192 black canvas (RGBA so alpha_composite works)
+            canvas = Image.new("RGBA", (192, 192), (0, 0, 0, 255))
 
-            # Paste photo as base layer (fills rows 0–139)
-            canvas.paste(photo.convert("RGB"), (0, 0))
+            # Composite photo using alpha channel so transparent areas stay
+            # black rather than turning white (what convert("RGB") does to
+            # fully-transparent RGBA pixels in silhouette PNGs).
+            canvas.alpha_composite(photo.convert("RGBA"), (0, 0))
+            canvas = canvas.convert("RGB")
 
             draw = ImageDraw.Draw(canvas)
 
